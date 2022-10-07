@@ -1,5 +1,9 @@
 package hu.elte.inf.wiki
 
-object Wiki {
+class Wiki() {
+  def start() = {}
+}
 
+object Wiki {
+  def main(arguments: Array[String]) = new Wiki().start()
 }
