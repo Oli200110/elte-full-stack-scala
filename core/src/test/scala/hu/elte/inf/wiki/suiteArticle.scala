@@ -6,6 +6,7 @@ import org.scalatest.matchers.should
 
 class suiteArticle extends AnyFlatSpec with should.Matchers with Logger {
   "An Article" should "be invalid when the `changes` are empty" in {
+    log.info("Hello!")
     assertThrows[IllegalArgumentException] {
       new Article("1", "body", Seq.empty, Seq.empty)
     }
