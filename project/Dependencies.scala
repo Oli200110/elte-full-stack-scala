@@ -29,7 +29,12 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-http-core" % "10.2.9",
     "com.typesafe.akka" %% "akka-http-testkit" % "10.2.9",
     "com.typesafe.akka" %% "akka-http-spray-json" % "10.2.9",
-    "com.typesafe.akka" %% "akka-http-testkit" % "10.2.9" % "test"
+    "com.typesafe.akka" %% "akka-http-testkit" % "10.2.9" % "test",
+    "de.heikoseeberger" %% "akka-http-json4s" % "1.38.2",
+    "org.json4s" %% "json4s-native" % "4.0.4",
+    "org.json4s" %% "json4s-core" % "4.0.4",
+    "org.json4s" %% "json4s-ext" % "4.0.4",
+    "org.json4s" %% "json4s-jackson" % "4.0.4"
   )
 
 }
