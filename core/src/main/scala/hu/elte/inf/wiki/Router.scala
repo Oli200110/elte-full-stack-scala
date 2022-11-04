@@ -5,11 +5,13 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{Directive1, Route}
 import de.heikoseeberger.akkahttpjson4s.Json4sSupport._
 import hu.elte.inf.wiki.Router.Protocol.Response.{modelArticleConverter, modelUserConverter}
-import org.json4s.{jackson, DefaultFormats, Formats}
+import hu.elte.inf.wiki.storage.Couchbase
+import org.json4s.{DefaultFormats, Formats, jackson}
 
-class Router() {
+class Router()(implicit couchbase: Couchbase) {
   implicit final protected val serializationFormat: Formats = DefaultFormats.withBigDecimal
   implicit final protected val serializationDriver = jackson.Serialization
+
   protected val userController = new controller.User()
   protected val articleController = new controller.Article()
 
