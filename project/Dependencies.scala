@@ -36,7 +36,8 @@ object Dependencies {
     "org.json4s" %% "json4s-ext" % "4.0.4",
     "org.json4s" %% "json4s-jackson" % "4.0.4",
     "com.couchbase.client" %% "scala-client" % "1.4.0",
-    "org.apache.commons" % "commons-lang3" % "3.12.0"
+    "org.apache.commons" % "commons-lang3" % "3.12.0",
+    "com.github.t3hnar" %% "scala-bcrypt" % "4.3.0"
   )
 
 }

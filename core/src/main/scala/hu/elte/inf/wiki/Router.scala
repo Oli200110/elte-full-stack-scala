@@ -2,17 +2,18 @@ package hu.elte.inf.wiki
 
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Directive1, Route}
+import akka.http.scaladsl.server.Route
+import akka.stream.StreamLimitReachedException
+import akka.util.ByteString
 import de.heikoseeberger.akkahttpjson4s.Json4sSupport._
-import hu.elte.inf.wiki.Router.Protocol.Response.{modelArticleConverter, modelUserConverter}
+import hu.elte.inf.wiki.Router.Protocol.Response.modelArticleConverter
 import hu.elte.inf.wiki.storage.Couchbase
-import org.json4s.{DefaultFormats, Formats, jackson}
 
-class Router()(implicit couchbase: Couchbase) {
-  implicit final protected val serializationFormat: Formats = DefaultFormats.withBigDecimal
-  implicit final protected val serializationDriver = jackson.Serialization
+import scala.util.{Failure, Success}
 
-  protected val userController = new controller.User()
+class Router()(implicit protected val couchbase: Couchbase)
+ extends routers.Base with routers.User with Logger {
+
   protected val articleController = new controller.Article()
 
   val route: Route =
@@ -43,26 +44,7 @@ class Router()(implicit couchbase: Couchbase) {
               }
             }
           } ~
-          path("user") {
-            withSession {
-              sessionID =>
-                get {
-                  val userID: String = ???
-                  complete {
-                    userController.get(userID).map(_.toProtocol)
-                  }
-                } ~
-                  patch {
-                    entity(as[Router.Protocol.Request.User]) {
-                      user =>
-                        val userID: String = ???
-                        complete {
-                          userController.update(userID, user.name).toProtocol
-                        }
-                    }
-                  }
-            }
-          } ~
+          userRoutes ~
           pathPrefix("articles") {
             pathEnd {
               get {
@@ -70,13 +52,16 @@ class Router()(implicit couchbase: Couchbase) {
                   articleController.getAll().map(_.toProtocol)
                 }
               } ~
-                post {
-                  entity(as[Router.Protocol.Request.Article]) {
-                    article =>
-                      complete {
-                        articleController.create(article.body).toProtocol
+                withSession {
+                  session =>
+                    post {
+                      entity(as[Router.Protocol.Request.Article]) {
+                        article =>
+                          complete {
+                            articleController.create(article.body)(session.userID).toProtocol
+                          }
                       }
-                  }
+                    }
                 }
             } ~
               path(Segment) {
@@ -86,23 +71,64 @@ class Router()(implicit couchbase: Couchbase) {
                       articleController.get(articleID).map(_.toProtocol)
                     }
                   } ~
-                    patch {
-                      entity(as[Router.Protocol.Request.Article]) {
-                        article =>
-                          complete {
-                            articleController.update(articleID, article.body).toProtocol
+                    withSession {
+                      session =>
+                        patch {
+                          entity(as[Router.Protocol.Request.Article]) {
+                            article =>
+                              complete {
+                                articleController.update(articleID, article.body)(
+                                  session.userID
+                                ).toProtocol
+                              }
                           }
-                      }
+                        }
+                    } ~
+                    pathPrefix("images") {
+                      pathEnd {
+                        withSession {
+                          session =>
+                            extractRequestContext {
+                              context =>
+                                withSizeLimit(4 * 1024 * 1024) {
+                                  fileUpload("image") {
+                                    case (metadata, byteSource) =>
+                                      onComplete(byteSource.runFold(ByteString.empty)(_ ++ _)(
+                                        context.materializer
+                                      )) {
+                                        case Failure(_: StreamLimitReachedException) =>
+                                          complete(StatusCodes.PayloadTooLarge)
+                                        case Failure(exception) =>
+                                          log.error(
+                                            s"Upload failed due to exception [${exception.getClass.getCanonicalName}]!"
+                                          )
+                                          exception.printStackTrace()
+                                          complete(StatusCodes.InternalServerError)
+                                        case Success(uploadedBytes) =>
+                                          complete(
+                                            articleController.uploadImage(
+                                              uploadedBytes.toArray[Byte],
+                                              metadata.contentType.mediaType
+                                            )
+                                          )
+                                      }
+                                  }
+                                }
+                            }
+                        }
+                      } ~
+                        path(Segment) {
+                          imageID =>
+                            get {
+                              complete(
+                                articleController.getImage(imageID)
+                              )
+                            }
+                        }
                     }
               }
           }
       }
-    }
-
-  def withSession: Directive1[Option[String]] =
-    optionalHeaderValueByName("Session").flatMap {
-      case Some(sessionID) => provide(sessionID)
-      case None            => reject
     }
 
 }
@@ -124,10 +150,10 @@ object Router {
         def toProtocol: Article = Article(article)
       }
 
-      case class Article(body: String)
+      case class Article(body: String, images: Seq[String])
 
       object Article {
-        def apply(article: model.Article): Article = Article(article.body)
+        def apply(article: model.Article): Article = Article(article.body, article.images)
       }
 
       implicit class modelUserConverter(user: model.User) {
